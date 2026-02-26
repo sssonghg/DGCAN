@@ -16,6 +16,7 @@ struct ContentView: View {
             Text("안녕!")
                 .font(.largeTitle)
                 .fontWeight(.bold)
+                .foregroundColor(.red)
         }
     }
 }
