@@ -9,14 +9,26 @@ import SwiftUI
 
 struct ContentView: View {
     var body: some View {
-        ZStack {
-            Color.white
-                .ignoresSafeArea()
+        TabView {
+            DeptNoticeView()
+                .tabItem {
+                    Label("학부 공지", systemImage: "doc.text")
+                }
 
-            Text("안녕!")
-                .font(.largeTitle)
-                .fontWeight(.bold)
-                .foregroundColor(.red)
+            ScholarshipView()
+                .tabItem {
+                    Label("장학 정보", systemImage: "graduationcap")
+                }
+
+            ContestView()
+                .tabItem {
+                    Label("공모전 정보", systemImage: "trophy")
+                }
+
+            JobView()
+                .tabItem {
+                    Label("채용 정보", systemImage: "briefcase")
+                }
         }
     }
 }
