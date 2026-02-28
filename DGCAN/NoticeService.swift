@@ -7,6 +7,20 @@
 
 import Foundation
 
+/// 서버에서 내려주는 공지사항 응답 구조체
+struct NoticeResponse: Decodable {
+    let items: [Notice]
+    let totalCount: Int
+    let page: Int
+    let hasNext: Bool
+
+    private enum CodingKeys: String, CodingKey {
+        case items, page
+        case hasNext = "has_next"
+        case totalCount = "total_count"
+    }
+}
+
 /// 서버에서 공지사항을 가져오는 서비스
 final class NoticeService {
     /// 서버 기본 URL (맥북에서 서버 실행 시 본인 맥북의 로컬 IP로 변경 필요)
@@ -19,9 +33,12 @@ final class NoticeService {
     private let baseURL = "http://192.168.0.100:5000"  // 여기를 본인 맥북 IP로 변경!
     #endif
 
-    /// 학부 공지 최신 10개를 서버에서 가져오기
-    func fetchNotices() async throws -> [Notice] {
-        guard let url = URL(string: "\(baseURL)/notices") else {
+    /// 학부 공지 사항을 서버에서 페이지 단위로 가져오기
+    func fetchNotices(page: Int = 1) async throws -> NoticeResponse {
+        var components = URLComponents(string: "\(baseURL)/notices")
+        components?.queryItems = [URLQueryItem(name: "page", value: "\(page)")]
+
+        guard let url = components?.url else {
             throw URLError(.badURL)
         }
 
@@ -33,7 +50,7 @@ final class NoticeService {
         }
 
         let decoder = JSONDecoder()
-        let notices = try decoder.decode([Notice].self, from: data)
-        return notices
+        let result = try decoder.decode(NoticeResponse.self, from: data)
+        return result
     }
 }

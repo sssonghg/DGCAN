@@ -83,6 +83,11 @@ struct DeptNoticeView: View {
     @State private var notices: [Notice] = []
     @State private var isLoading = false
     @State private var errorMessage: String?
+    
+    // 페이징 관련 상태
+    @State private var currentPage = 1
+    @State private var totalCount = 0
+    private let perPage = 10
 
     var body: some View {
         NavigationStack {
@@ -104,56 +109,98 @@ struct DeptNoticeView: View {
                             .padding(.horizontal)
 
                         Button("다시 시도") {
-                            loadNotices()
+                            loadPage(currentPage)
                         }
                         .buttonStyle(.borderedProminent)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    List(notices) { notice in
-                        NavigationLink {
-                            NoticeWebView(notice: notice)
-                        } label: {
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text(notice.title)
-                                    .font(.headline)
-                                    .foregroundColor(.primary)
-                                    .multilineTextAlignment(.leading)
+                    List {
+                        ForEach(notices) { notice in
+                            NavigationLink {
+                                NoticeWebView(notice: notice)
+                            } label: {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text(notice.title)
+                                        .font(.headline)
+                                        .foregroundColor(.primary)
+                                        .multilineTextAlignment(.leading)
 
-                                Text(notice.date)
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
+                                    Text(notice.date)
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                }
+                                .padding(.vertical, 4)
                             }
-                            .padding(.vertical, 4)
+                        }
+                        
+                        // 리스트 맨 아래에 페이지네이션 컨트롤 삽입
+                        if totalCount > perPage {
+                            Section {
+                                paginationControl
+                                    .listRowBackground(Color.clear)
+                                    .listRowInsets(EdgeInsets())
+                            }
                         }
                     }
                     .refreshable {
-                        await loadNoticesAsync()
+                        await fetchNotices(page: currentPage)
                     }
                 }
             }
             .navigationTitle("학부 공지")
             .task {
-                // 앱 켤 때마다 자동으로 공지사항 로드
-                await loadNoticesAsync()
+                if notices.isEmpty {
+                    await fetchNotices(page: 1)
+                }
             }
         }
     }
 
-    private func loadNotices() {
-        Task {
-            await loadNoticesAsync()
+    // 페이지 번호 버튼들이 있는 뷰 (원래 스타일 유지하며 리스트 내부에 배치)
+    private var paginationControl: some View {
+        let totalPages = max(1, Int(ceil(Double(totalCount) / Double(perPage))))
+        
+        return ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                Spacer(minLength: 10)
+                ForEach(1...totalPages, id: \.self) { page in
+                    Button {
+                        loadPage(page)
+                    } label: {
+                        Text("\(page)")
+                            .font(.headline)
+                            .foregroundColor(currentPage == page ? .white : .accentColor)
+                            .frame(width: 40, height: 40)
+                            .background(currentPage == page ? Color.accentColor : Color.clear)
+                            .clipShape(Circle())
+                            .overlay(
+                                Circle().stroke(Color.accentColor, lineWidth: 1)
+                            )
+                    }
+                }
+                Spacer(minLength: 10)
+            }
+            .padding(.vertical, 20)
         }
     }
 
-    private func loadNoticesAsync() async {
+    private func loadPage(_ page: Int) {
+        Task {
+            await fetchNotices(page: page)
+        }
+    }
+
+    private func fetchNotices(page: Int) async {
         isLoading = true
         errorMessage = nil
 
         do {
-            let fetchedNotices = try await service.fetchNotices()
+            let response = try await service.fetchNotices(page: page)
             await MainActor.run {
-                self.notices = fetchedNotices
+                self.notices = response.items
+                self.totalCount = response.totalCount
+                self.currentPage = page
                 self.isLoading = false
             }
         } catch {
@@ -163,6 +210,7 @@ struct DeptNoticeView: View {
                 // 서버 연결 실패 시 샘플 데이터로 폴백
                 if self.notices.isEmpty {
                     self.notices = Notice.deptSampleData
+                    self.totalCount = Notice.deptSampleData.count
                 }
             }
         }
