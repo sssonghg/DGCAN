@@ -79,33 +79,92 @@ extension Notice {
 }
 
 struct DeptNoticeView: View {
-    /// 파이썬/서버에서 받은 학부 공지 배열을 이 프로퍼티에 넣어서 사용
-    let notices: [Notice]
-
-    init(notices: [Notice] = Notice.deptSampleData) {
-        self.notices = notices
-    }
+    private let service = NoticeService()
+    @State private var notices: [Notice] = []
+    @State private var isLoading = false
+    @State private var errorMessage: String?
 
     var body: some View {
         NavigationStack {
-            List(notices) { notice in
-                NavigationLink {
-                    NoticeWebView(notice: notice)
-                } label: {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(notice.title)
+            Group {
+                if isLoading {
+                    ProgressView("공지사항 불러오는 중...")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if let error = errorMessage {
+                    VStack(spacing: 16) {
+                        Image(systemName: "exclamationmark.triangle")
+                            .font(.largeTitle)
+                            .foregroundColor(.orange)
+                        Text("오류 발생")
                             .font(.headline)
-                            .foregroundColor(.primary)
-                            .multilineTextAlignment(.leading)
-
-                        Text(notice.date)
+                        Text(error)
                             .font(.subheadline)
                             .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal)
+
+                        Button("다시 시도") {
+                            loadNotices()
+                        }
+                        .buttonStyle(.borderedProminent)
                     }
-                    .padding(.vertical, 4)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    List(notices) { notice in
+                        NavigationLink {
+                            NoticeWebView(notice: notice)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(notice.title)
+                                    .font(.headline)
+                                    .foregroundColor(.primary)
+                                    .multilineTextAlignment(.leading)
+
+                                Text(notice.date)
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.vertical, 4)
+                        }
+                    }
+                    .refreshable {
+                        await loadNoticesAsync()
+                    }
                 }
             }
             .navigationTitle("학부 공지")
+            .task {
+                // 앱 켤 때마다 자동으로 공지사항 로드
+                await loadNoticesAsync()
+            }
+        }
+    }
+
+    private func loadNotices() {
+        Task {
+            await loadNoticesAsync()
+        }
+    }
+
+    private func loadNoticesAsync() async {
+        isLoading = true
+        errorMessage = nil
+
+        do {
+            let fetchedNotices = try await service.fetchNotices()
+            await MainActor.run {
+                self.notices = fetchedNotices
+                self.isLoading = false
+            }
+        } catch {
+            await MainActor.run {
+                self.errorMessage = "서버 연결 실패\n\n맥북에서 서버가 실행 중인지 확인하세요:\npython3 server.py\n\n에러: \(error.localizedDescription)"
+                self.isLoading = false
+                // 서버 연결 실패 시 샘플 데이터로 폴백
+                if self.notices.isEmpty {
+                    self.notices = Notice.deptSampleData
+                }
+            }
         }
     }
 }
