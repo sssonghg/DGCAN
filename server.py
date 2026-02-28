@@ -46,8 +46,8 @@ def fetch_notice_latest(page: int = 1, per_page: int = 10):
     all_items = []
     seen_seq = set()
     
-    # 2026년 이전 글이 나올 때까지 또는 최대 5페이지까지 탐색
-    for page_idx in range(1, 6):
+    # 2026년 게시글이 계속 나오는 한 최대 100페이지까지 탐색
+    for page_idx in range(1, 101):
         list_url = f"{urljoin(BASE_URL, NOTICE_PATH)}?pageIndex={page_idx}"
         
         try:
@@ -114,6 +114,16 @@ def fetch_notice_latest(page: int = 1, per_page: int = 10):
 
     # 날짜 내림차순 정렬 (최신순)
     all_items.sort(key=lambda x: x["date"] if x["date"] else "0000-00-00", reverse=True)
+
+    # 가장 최근 날짜의 게시글에 "New" 표시 추가
+    if all_items:
+        latest_date = all_items[0]["date"]
+        for item in all_items:
+            if item["date"] == latest_date:
+                item["title"] = f"[New] {item['title']}"
+                item["is_new"] = True
+            else:
+                item["is_new"] = False
 
     # 페이징 처리
     total_count = len(all_items)
