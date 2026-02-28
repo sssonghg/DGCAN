@@ -11,14 +11,34 @@ from urllib.error import URLError
 from flask import Flask, jsonify
 from flask_cors import CORS
 from bs4 import BeautifulSoup
+from apscheduler.schedulers.background import BackgroundScheduler
 import re
 import ssl
+import time
+import json
 
 app = Flask(__name__)
 CORS(app)  # iOS 앱에서 접근 가능하도록 CORS 허용
 
+# JSON 응답 시 한글 깨짐 방지 및 정렬 설정
+app.config['JSON_AS_ASCII'] = False
+app.json.ensure_ascii = False
+app.json.sort_keys = False
+app.json.compact = False  # 줄바꿈 및 들여쓰기 활성화
+app.config['JSONIFY_PRETTYPRINT_REGULAR'] = True
+
 BASE_URL = "https://cs.dongguk.edu"
 NOTICE_PATH = "/article/notice/list"
+
+# 전역 변수로 데이터 캐싱
+cached_notices = {
+    "items": [],
+    "total_count": 0,
+    "page": 1,
+    "per_page": 1000,
+    "has_next": False,
+    "last_updated": ""
+}
 
 
 def fetch_notice_latest(page: int = 1, per_page: int = 10):
@@ -112,12 +132,24 @@ def fetch_notice_latest(page: int = 1, per_page: int = 10):
 
 @app.route("/notices", methods=["GET"])
 def get_notices():
-    """학부 공지사항의 2026년도 이후 모든 데이터를 JSON으로 반환"""
-    # page 인자를 무시하고 모든 데이터를 가져오도록 fetch_notice_latest의 로직을 
-    # 조금 수정하거나 per_page를 아주 크게 설정할 수 있습니다.
-    # 여기서는 per_page를 1000으로 설정하여 모든 데이터를 한 번에 가져옵니다.
-    result = fetch_notice_latest(page=1, per_page=1000)
-    return jsonify(result)
+    """캐시된 학부 공지사항 데이터를 반환"""
+    # 데이터가 아직 없으면 한 번 가져옴
+    if not cached_notices["items"]:
+        update_notices_cache()
+    return jsonify(cached_notices)
+
+
+def update_notices_cache():
+    """백그라운드에서 실행될 크롤링 및 캐시 업데이트 함수"""
+    global cached_notices
+    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 크롤링 시작...")
+    try:
+        result = fetch_notice_latest(page=1, per_page=1000)
+        result["last_updated"] = time.strftime("%Y-%m-%d %H:%M:%S")
+        cached_notices = result
+        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 크롤링 완료: {len(result['items'])}개의 공지사항 캐시됨")
+    except Exception as e:
+        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 크롤링 실패: {e}")
 
 
 @app.route("/health", methods=["GET"])
@@ -127,7 +159,20 @@ def health():
 
 
 if __name__ == "__main__":
+    # 스케줄러 설정
+    scheduler = BackgroundScheduler()
+    # 5분(300초)마다 update_notices_cache 함수 실행
+    scheduler.add_job(func=update_notices_cache, trigger="interval", seconds=300)
+    scheduler.start()
+    
+    # 서버 시작 시 즉시 한 번 크롤링
+    update_notices_cache()
+
     print("서버 시작: http://localhost:5000")
     print("학부 공지 API: http://localhost:5000/notices")
     print("상태 확인: http://localhost:5000/health")
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    
+    try:
+        app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False)
+    finally:
+        scheduler.shutdown()
