@@ -30,6 +30,8 @@ app.config['JSONIFY_PRETTYPRINT_REGULAR'] = True
 BASE_URL = "https://cs.dongguk.edu"
 NOTICE_PATH = "/article/notice/list"
 SCHOLARSHIP_PATH = "/article/collegedata/list"
+CONTEST_PATH = "/article/etc/list"
+JOB_PATH = "/article/employment/list"
 
 # 전역 변수로 데이터 캐싱
 cached_notices = {
@@ -42,6 +44,24 @@ cached_notices = {
 }
 
 cached_scholarships = {
+    "items": [],
+    "total_count": 0,
+    "page": 1,
+    "per_page": 1000,
+    "has_next": False,
+    "last_updated": ""
+}
+
+cached_contests = {
+    "items": [],
+    "total_count": 0,
+    "page": 1,
+    "per_page": 1000,
+    "has_next": False,
+    "last_updated": ""
+}
+
+cached_jobs = {
     "items": [],
     "total_count": 0,
     "page": 1,
@@ -142,7 +162,7 @@ def fetch_notices_generic(path, limit_year=None, max_pages=5):
 
 def update_caches():
     """백그라운드 캐시 업데이트"""
-    global cached_notices, cached_scholarships
+    global cached_notices, cached_scholarships, cached_contests, cached_jobs
     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 전체 크롤링 시작...")
     
     # 학부 공지 (2026년 이후만)
@@ -156,6 +176,18 @@ def update_caches():
         cached_scholarships = fetch_notices_generic(SCHOLARSHIP_PATH, limit_year=None)
         cached_scholarships["last_updated"] = time.strftime("%Y-%m-%d %H:%M:%S")
     except Exception as e: print(f"장학정보 크롤링 실패: {e}")
+
+    # 공모전 정보 (모든 년도)
+    try:
+        cached_contests = fetch_notices_generic(CONTEST_PATH, limit_year=None)
+        cached_contests["last_updated"] = time.strftime("%Y-%m-%d %H:%M:%S")
+    except Exception as e: print(f"공모전정보 크롤링 실패: {e}")
+
+    # 채용 정보 (모든 년도)
+    try:
+        cached_jobs = fetch_notices_generic(JOB_PATH, limit_year=None)
+        cached_jobs["last_updated"] = time.strftime("%Y-%m-%d %H:%M:%S")
+    except Exception as e: print(f"채용정보 크롤링 실패: {e}")
     
     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 크롤링 완료")
 
@@ -170,6 +202,18 @@ def get_notices():
 def get_scholarships():
     if not cached_scholarships["items"]: update_caches()
     return jsonify(cached_scholarships)
+
+
+@app.route("/contests", methods=["GET"])
+def get_contests():
+    if not cached_contests["items"]: update_caches()
+    return jsonify(cached_contests)
+
+
+@app.route("/jobs", methods=["GET"])
+def get_jobs():
+    if not cached_jobs["items"]: update_caches()
+    return jsonify(cached_jobs)
 
 
 @app.route("/health", methods=["GET"])

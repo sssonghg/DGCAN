@@ -74,4 +74,46 @@ final class NoticeService {
         let result = try decoder.decode(NoticeResponse.self, from: data)
         return result
     }
+
+    /// 공모전 정보를 서버에서 가져오기
+    func fetchContests(page: Int = 1) async throws -> NoticeResponse {
+        var components = URLComponents(string: "\(baseURL)/contests")
+        components?.queryItems = [URLQueryItem(name: "page", value: "\(page)")]
+
+        guard let url = components?.url else {
+            throw URLError(.badURL)
+        }
+
+        let (data, response) = try await URLSession.shared.data(from: url)
+
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            throw URLError(.badServerResponse)
+        }
+
+        let decoder = JSONDecoder()
+        let result = try decoder.decode(NoticeResponse.self, from: data)
+        return result
+    }
+
+    /// 채용 정보를 서버에서 가져오기
+    func fetchJobs(page: Int = 1) async throws -> NoticeResponse {
+        var components = URLComponents(string: "\(baseURL)/jobs")
+        components?.queryItems = [URLQueryItem(name: "page", value: "\(page)")]
+
+        guard let url = components?.url else {
+            throw URLError(.badURL)
+        }
+
+        let (data, response) = try await URLSession.shared.data(from: url)
+
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            throw URLError(.badServerResponse)
+        }
+
+        let decoder = JSONDecoder()
+        let result = try decoder.decode(NoticeResponse.self, from: data)
+        return result
+    }
 }
