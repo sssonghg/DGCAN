@@ -9,14 +9,36 @@ import SwiftUI
 
 /// 파이썬에서 내려주는 JSON 배열:
 /// [{ "title": "...", "date": "YYYY-MM-DD", "url": "https://..." }, ...]
-struct Notice: Identifiable, Decodable {
-    let id = UUID()
+struct Notice: Identifiable, Codable, Equatable {
+    let id: UUID
     let title: String
     let date: String
     let url: String
 
+    init(id: UUID = UUID(), title: String, date: String, url: String) {
+        self.id = id
+        self.title = title
+        self.date = date
+        self.url = url
+    }
+
     private enum CodingKeys: String, CodingKey {
         case title, date, url
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = UUID()
+        self.title = try container.decode(String.self, forKey: .title)
+        self.date = try container.decode(String.self, forKey: .date)
+        self.url = try container.decode(String.self, forKey: .url)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = try encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(title, forKey: .title)
+        try container.encode(date, forKey: .date)
+        try container.encode(url, forKey: .url)
     }
 }
 

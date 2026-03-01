@@ -11,11 +11,22 @@ import WebKit
 /// 특정 공지의 URL을 로드해서 보여주는 WebView 화면
 struct NoticeWebView: View {
     let notice: Notice
+    @StateObject private var scrapManager = ScrapManager.shared
 
     var body: some View {
         WebView(urlString: notice.url)
             .navigationTitle("공지 상세")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        scrapManager.toggleScrap(notice)
+                    } label: {
+                        Image(systemName: scrapManager.isScrapped(notice) ? "bookmark.fill" : "bookmark")
+                            .foregroundColor(scrapManager.isScrapped(notice) ? .orange : .accentColor)
+                    }
+                }
+            }
     }
 }
 

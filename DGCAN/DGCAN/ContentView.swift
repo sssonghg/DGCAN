@@ -29,6 +29,11 @@ struct ContentView: View {
                 .tabItem {
                     Label("채용 정보", systemImage: "briefcase")
                 }
+
+            ScrapView()
+                .tabItem {
+                    Label("스크랩", systemImage: "bookmark.fill")
+                }
         }
     }
 }
