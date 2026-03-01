@@ -31,7 +31,7 @@ BASE_URL = "https://cs.dongguk.edu"
 NOTICE_PATH = "/article/notice/list"
 SCHOLARSHIP_PATH = "/article/collegedata/list"
 CONTEST_PATH = "/article/etc/list"
-JOB_PATH = "/article/employment/list"
+JOB_PATH = "/article/job/list"
 
 # 전역 변수로 데이터 캐싱
 cached_notices = {
@@ -183,9 +183,9 @@ def update_caches():
         cached_contests["last_updated"] = time.strftime("%Y-%m-%d %H:%M:%S")
     except Exception as e: print(f"공모전정보 크롤링 실패: {e}")
 
-    # 채용 정보 (모든 년도)
+    # 채용 정보 (2026년 이후만)
     try:
-        cached_jobs = fetch_notices_generic(JOB_PATH, limit_year=None)
+        cached_jobs = fetch_notices_generic(JOB_PATH, limit_year=2026)
         cached_jobs["last_updated"] = time.strftime("%Y-%m-%d %H:%M:%S")
     except Exception as e: print(f"채용정보 크롤링 실패: {e}")
     
