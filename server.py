@@ -29,6 +29,7 @@ app.config['JSONIFY_PRETTYPRINT_REGULAR'] = True
 
 BASE_URL = "https://cs.dongguk.edu"
 NOTICE_PATH = "/article/notice/list"
+SCHOLARSHIP_PATH = "/article/collegedata/list"
 
 # 전역 변수로 데이터 캐싱
 cached_notices = {
@@ -40,126 +41,135 @@ cached_notices = {
     "last_updated": ""
 }
 
+cached_scholarships = {
+    "items": [],
+    "total_count": 0,
+    "page": 1,
+    "per_page": 1000,
+    "has_next": False,
+    "last_updated": ""
+}
 
-def fetch_notice_latest(page: int = 1, per_page: int = 10):
-    """학부 공지 게시판에서 2026년 이후의 모든 글을 여러 페이지에 걸쳐 가져와 페이지별로 반환"""
+
+def fetch_notices_generic(path, limit_year=None, max_pages=5):
+    """범용 공지사항 크롤러: 지정된 경로에서 데이터를 가져옴"""
     all_items = []
     seen_seq = set()
     
-    # 2026년 게시글이 계속 나오는 한 최대 100페이지까지 탐색
-    for page_idx in range(1, 101):
-        list_url = f"{urljoin(BASE_URL, NOTICE_PATH)}?pageIndex={page_idx}"
+    for page_idx in range(1, max_pages + 1):
+        list_url = f"{urljoin(BASE_URL, path)}?pageIndex={page_idx}"
         
         try:
             req = Request(list_url, headers={"User-Agent": "Mozilla/5.0"})
-            try:
-                with urlopen(req, timeout=15) as resp:
-                    html = resp.read()
-            except URLError as e:
-                if isinstance(getattr(e, "reason", None), ssl.SSLCertVerificationError):
-                    ctx = ssl._create_unverified_context()
-                    with urlopen(req, timeout=15, context=ctx) as resp:
-                        html = resp.read()
-                else:
-                    raise
+            ctx = ssl._create_unverified_context()
+            with urlopen(req, timeout=15, context=ctx) as resp:
+                html = resp.read()
 
             soup = BeautifulSoup(html, "html.parser")
-            page_has_2026 = False
+            rows_found = False
 
-            for a_tag in soup.find_all("a", onclick=True):
+            # 테이블 기반 또는 리스트 기반 구조 파악
+            # 보통 tr 또는 li 안에 데이터가 있음
+            for item_container in soup.select("tr, li"):
+                # onclick="goDetail('1234')" 패턴 찾기
+                a_tag = item_container.find("a", onclick=True)
+                if not a_tag: continue
+                
                 onclick = a_tag.get("onclick", "")
                 m = re.search(r"goDetail\((\d+)\)", onclick)
-                if not m:
-                    continue
+                if not m: continue
 
                 article_seq = m.group(1)
-                if article_seq in seen_seq:
-                    continue
+                if article_seq in seen_seq: continue
                 seen_seq.add(article_seq)
 
-                title = " ".join(a_tag.stripped_strings)
-                title = re.sub(r"\s+", " ", title).strip()
-                if not title:
+                title = " ".join(a_tag.stripped_strings).strip()
+                if not title: continue
+
+                # 날짜 추출
+                date = ""
+                # .date 클래스 우선 검색, 없으면 텍스트에서 정규식 추출
+                date_tag = item_container.select_one(".date")
+                if date_tag:
+                    date = date_tag.get_text(strip=True)
+                else:
+                    text_content = item_container.get_text(" ", strip=True)
+                    dm = re.search(r"\d{4}-\d{2}-\d{2}", text_content)
+                    date = dm.group(0) if dm else ""
+
+                if not date: continue
+                
+                # 년도 제한 확인
+                year = int(date.split("-")[0])
+                if limit_year and year < limit_year:
                     continue
 
-                container = a_tag.find_parent("li") or a_tag.parent
-                date = ""
-                if container:
-                    date_tag = container.select_one("li.date")
-                    if date_tag:
-                        date = date_tag.get_text(strip=True)
-                    else:
-                        text_block = container.get_text(" ", strip=True)
-                        dm = re.search(r"\d{4}-\d{2}-\d{2}", text_block)
-                        date = dm.group(0) if dm else ""
+                detail_url = urljoin(BASE_URL, f"{path.replace('list', 'detail')}/{article_seq}")
+                all_items.append({
+                    "seq": article_seq,
+                    "title": title,
+                    "date": date,
+                    "url": detail_url,
+                    "is_new": False
+                })
+                rows_found = True
 
-                # 날짜 조건 확인 (2026년 이후 게시글)
-                if date:
-                    year = int(date.split("-")[0])
-                    if year >= 2026:
-                        page_has_2026 = True
-                        detail_url = urljoin(BASE_URL, f"/article/notice/detail/{article_seq}")
-                        all_items.append({"title": title, "date": date, "url": detail_url})
-                    else:
-                        # 2026년 미만 글이 발견되면 더 이상 다음 페이지를 볼 필요가 없음 (최신순 게시판 가정)
-                        pass
-
-            # 해당 페이지에 2026년 글이 하나도 없었다면 탐색 중단
-            if not page_has_2026:
-                break
+            if not rows_found: break
                 
         except Exception as e:
-            print(f"페이지 {page_idx} 크롤링 오류: {e}")
+            print(f"[{path}] 페이지 {page_idx} 크롤링 중 오류: {e}")
             break
 
-    # 날짜 내림차순 정렬 (최신순)
-    all_items.sort(key=lambda x: x["date"] if x["date"] else "0000-00-00", reverse=True)
+    # 최신순 정렬
+    all_items.sort(key=lambda x: x["date"], reverse=True)
 
-    # 가장 최근 날짜의 게시글에 "New" 표시 추가
+    # [New] 표시: 가장 최근 날짜의 글들에 추가
     if all_items:
         latest_date = all_items[0]["date"]
         for item in all_items:
             if item["date"] == latest_date:
                 item["title"] = f"[New] {item['title']}"
                 item["is_new"] = True
-            else:
-                item["is_new"] = False
-
-    # 페이징 처리
-    total_count = len(all_items)
-    start_idx = (page - 1) * per_page
-    end_idx = start_idx + per_page
-    paginated_items = all_items[start_idx:end_idx]
 
     return {
-        "items": paginated_items,
-        "total_count": total_count,
-        "page": page,
-        "per_page": per_page,
-        "has_next": end_idx < total_count
+        "items": all_items,
+        "total_count": len(all_items),
+        "page": 1,
+        "per_page": 1000,
+        "has_next": False
     }
+
+
+def update_caches():
+    """백그라운드 캐시 업데이트"""
+    global cached_notices, cached_scholarships
+    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 전체 크롤링 시작...")
+    
+    # 학부 공지 (2026년 이후만)
+    try:
+        cached_notices = fetch_notices_generic(NOTICE_PATH, limit_year=2026)
+        cached_notices["last_updated"] = time.strftime("%Y-%m-%d %H:%M:%S")
+    except Exception as e: print(f"학부공지 크롤링 실패: {e}")
+    
+    # 장학 정보 (모든 년도)
+    try:
+        cached_scholarships = fetch_notices_generic(SCHOLARSHIP_PATH, limit_year=None)
+        cached_scholarships["last_updated"] = time.strftime("%Y-%m-%d %H:%M:%S")
+    except Exception as e: print(f"장학정보 크롤링 실패: {e}")
+    
+    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 크롤링 완료")
 
 
 @app.route("/notices", methods=["GET"])
 def get_notices():
-    """캐시된 학부 공지사항 데이터를 반환"""
-    # 데이터가 아직 없으면 한 번 가져옴
-    if not cached_notices["items"]:
-        update_notices_cache()
+    if not cached_notices["items"]: update_caches()
     return jsonify(cached_notices)
 
 
-def update_notices_cache():
-    """백그라운드에서 실행될 크롤링 및 캐시 업데이트 함수"""
-    global cached_notices
-    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 크롤링 시작...")
-    try:
-        result = fetch_notice_latest(page=1, per_page=1000)
-        result["last_updated"] = time.strftime("%Y-%m-%d %H:%M:%S")
-        cached_notices = result
-        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 크롤링 완료: {len(result['items'])}개의 공지사항 캐시됨")
-    except Exception as e:
-        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 크롤링 실패: {e}")
+@app.route("/scholarships", methods=["GET"])
+def get_scholarships():
+    if not cached_scholarships["items"]: update_caches()
+    return jsonify(cached_scholarships)
 
 
 @app.route("/health", methods=["GET"])
@@ -171,15 +181,16 @@ def health():
 if __name__ == "__main__":
     # 스케줄러 설정
     scheduler = BackgroundScheduler()
-    # 5분(300초)마다 update_notices_cache 함수 실행
-    scheduler.add_job(func=update_notices_cache, trigger="interval", seconds=300)
+    # 5분(300초)마다 update_caches 함수 실행
+    scheduler.add_job(func=update_caches, trigger="interval", seconds=300)
     scheduler.start()
     
     # 서버 시작 시 즉시 한 번 크롤링
-    update_notices_cache()
+    update_caches()
 
     print("서버 시작: http://localhost:5000")
     print("학부 공지 API: http://localhost:5000/notices")
+    print("장학 정보 API: http://localhost:5000/scholarships")
     print("상태 확인: http://localhost:5000/health")
     
     try:
