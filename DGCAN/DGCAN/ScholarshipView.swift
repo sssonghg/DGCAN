@@ -19,7 +19,11 @@ struct ScholarshipView: View {
 
     var body: some View {
         NavigationStack {
-            List(notices) { notice in
+            List(notices.map { 
+                var n = $0
+                n.category = .scholarship
+                return n
+            }) { notice in
                 NavigationLink {
                     NoticeWebView(notice: notice)
                 } label: {

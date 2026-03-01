@@ -18,7 +18,11 @@ struct JobView: View {
 
     var body: some View {
         NavigationStack {
-            List(notices) { notice in
+            List(notices.map { 
+                var n = $0
+                n.category = .job
+                return n
+            }) { notice in
                 NavigationLink {
                     NoticeWebView(notice: notice)
                 } label: {

@@ -10,20 +10,30 @@ import SwiftUI
 /// 파이썬에서 내려주는 JSON 배열:
 /// [{ "title": "...", "date": "YYYY-MM-DD", "url": "https://..." }, ...]
 struct Notice: Identifiable, Codable, Equatable {
+    enum Category: String, Codable, CaseIterable {
+        case dept = "학부 공지"
+        case scholarship = "장학 정보"
+        case contest = "공모전 정보"
+        case job = "채용 정보"
+        case unknown = "기타"
+    }
+
     let id: UUID
     let title: String
     let date: String
     let url: String
+    var category: Category
 
-    init(id: UUID = UUID(), title: String, date: String, url: String) {
+    init(id: UUID = UUID(), title: String, date: String, url: String, category: Category = .unknown) {
         self.id = id
         self.title = title
         self.date = date
         self.url = url
+        self.category = category
     }
 
     private enum CodingKeys: String, CodingKey {
-        case title, date, url
+        case title, date, url, category
     }
 
     init(from decoder: Decoder) throws {
@@ -32,6 +42,7 @@ struct Notice: Identifiable, Codable, Equatable {
         self.title = try container.decode(String.self, forKey: .title)
         self.date = try container.decode(String.self, forKey: .date)
         self.url = try container.decode(String.self, forKey: .url)
+        self.category = try container.decodeIfPresent(Category.self, forKey: .category) ?? .unknown
     }
 
     func encode(to encoder: Encoder) throws {
@@ -39,6 +50,7 @@ struct Notice: Identifiable, Codable, Equatable {
         try container.encode(title, forKey: .title)
         try container.encode(date, forKey: .date)
         try container.encode(url, forKey: .url)
+        try container.encode(category, forKey: .category)
     }
 }
 
@@ -48,12 +60,14 @@ extension Notice {
         Notice(
             title: "2026-1학기 SW연계전공 <튜터> 지원 공고(~3/9(월)오전10시까지)",
             date: "2026-02-25",
-            url: "https://cs.dongguk.edu/article/notice/detail/226"
+            url: "https://cs.dongguk.edu/article/notice/detail/226",
+            category: .dept
         ),
         Notice(
             title: "2026학년도 1학기 종합설계1(CSC4018) 05분반 추가 개설 및 수강 정원 증원",
             date: "2026-02-25",
-            url: "https://cs.dongguk.edu/article/notice/detail/225"
+            url: "https://cs.dongguk.edu/article/notice/detail/225",
+            category: .dept
         )
     ]
 
@@ -62,12 +76,14 @@ extension Notice {
         Notice(
             title: "SW산학연지협력장학 인턴십 장학생 선발 공고",
             date: "2025-11-21",
-            url: "https://cs.dongguk.edu/article/collegedata/detail/8"
+            url: "https://cs.dongguk.edu/article/collegedata/detail/8",
+            category: .scholarship
         ),
         Notice(
             title: "2025학년도 컴퓨터공학과 동창회 장학생 선발 공고",
             date: "2025-11-20",
-            url: "https://cs.dongguk.edu/article/collegedata/detail/7"
+            url: "https://cs.dongguk.edu/article/collegedata/detail/7",
+            category: .scholarship
         )
     ]
 
@@ -76,12 +92,14 @@ extension Notice {
         Notice(
             title: "2024 퀀텀 챌린지(해커톤) 안내",
             date: "2024-10-15",
-            url: "https://cs.dongguk.edu/article/etc/detail/2"
+            url: "https://cs.dongguk.edu/article/etc/detail/2",
+            category: .contest
         ),
         Notice(
             title: "제4회 나의 세상을 바꾼 인생교양강좌 수강 수기 공모전 시행 안내",
             date: "2024-10-31",
-            url: "https://cs.dongguk.edu/article/etc/detail/3"
+            url: "https://cs.dongguk.edu/article/etc/detail/3",
+            category: .contest
         )
     ]
 
@@ -90,12 +108,14 @@ extension Notice {
         Notice(
             title: "2026년 1분기 소프트웨어 엔지니어 신입 채용",
             date: "2026-02-20",
-            url: "https://cs.dongguk.edu/article/job/detail/10"
+            url: "https://cs.dongguk.edu/article/job/detail/10",
+            category: .job
         ),
         Notice(
             title: "AI 연구 인턴십 채용 안내",
             date: "2026-02-10",
-            url: "https://cs.dongguk.edu/article/job/detail/9"
+            url: "https://cs.dongguk.edu/article/job/detail/9",
+            category: .job
         )
     ]
 }
@@ -175,7 +195,11 @@ struct DeptNoticeView: View {
         do {
             let response = try await service.fetchNotices(page: 1)
             await MainActor.run {
-                self.notices = response.items
+                self.notices = response.items.map {
+                    var notice = $0
+                    notice.category = .dept
+                    return notice
+                }
                 self.isLoading = false
             }
         } catch {
