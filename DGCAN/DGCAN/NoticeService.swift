@@ -30,7 +30,7 @@ final class NoticeService {
     #else
     // 실기기에서는 맥북의 로컬 IP 주소로 변경 필요
     // 터미널에서 `ifconfig | grep "inet "` 실행해서 en0의 inet 주소 확인
-    private let baseURL = "http://192.168.0.100:5000"  // 여기를 본인 맥북 IP로 변경!
+    private let baseURL = "http://172.30.1.82:5000"  // 현재 확인된 맥북 IP로 수정 완료!
     #endif
 
     /// 학부 공지 사항을 서버에서 페이지 단위로 가져오기
