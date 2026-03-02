@@ -8,7 +8,7 @@ from urllib.request import urlopen
 from urllib.request import Request
 from urllib.parse import urljoin
 from urllib.error import URLError
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 from bs4 import BeautifulSoup
 from apscheduler.schedulers.background import BackgroundScheduler

@@ -139,6 +139,11 @@ struct ContestView: View {
                 n.category = .contest
                 return n
             }
+            
+            // 최신 데이터가 있으면 알림 확인
+            if let top = self.notices.first {
+                LocalNotificationManager.shared.checkNewNotice(category: "공모전 정보", topNotice: top)
+            }
         } catch {
             errorMessage = error.localizedDescription
         }
