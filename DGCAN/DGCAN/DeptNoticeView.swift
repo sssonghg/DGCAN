@@ -186,6 +186,8 @@ struct DeptNoticeView: View {
                                     Text(notice.title)
                                         .font(.headline)
                                         .foregroundColor(.primary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                        .lineLimit(2)
                                         .multilineTextAlignment(.leading)
 
                                     Text(notice.date)
